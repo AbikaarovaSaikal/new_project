@@ -6,15 +6,19 @@ def main(page: ft.Page):
     page.title = 'todo list'
     page.theme_mode = ft.ThemeMode.LIGHT
     task_list = ft.Column(spacing=15)
-    error_text = ft.Text(value='Можно вводить максимум 100 символов!', color=ft.Colors.RED, visible=False) 
+    error_text = ft.Text(value='Можно вводить максимум 100 символов!', color=ft.Colors.RED, visible=False)
+
+    filter_type = 'all'
 
     def load_task():
         task_list.controls.clear()
-        for task_id, task_text in main_db.get_task():
-            task_list.controls.append(create_task_row(task_id=task_id, task_text=task_text))
+        for task_id, task_text, completed in main_db.get_task(filter_type):
+            task_list.controls.append(create_task_row(task_id=task_id, task_text=task_text, completed=completed))
         page.update()
 
-    def create_task_row(task_id, task_text):
+    def create_task_row(task_id, task_text, completed):
+
+        checkbox = ft.Checkbox(value=bool(completed), on_change=lambda e: toggle_task(task_id, e.control.value))
 
         def enable_edit(_):
             task_field.read_only = False
@@ -37,7 +41,7 @@ def main(page: ft.Page):
 
         task_field = ft.TextField(value=task_text, read_only=True, expand=True, on_submit=save_task)
 
-        return ft.Row([task_field, edit_button, save_button, delete_button])
+        return ft.Row([checkbox, task_field, edit_button, save_button, delete_button])
     
     def task_maximum(_):
         if len(task_input.value) >= 100:
@@ -46,11 +50,16 @@ def main(page: ft.Page):
             error_text.visible = False
         page.update()
 
+    def toggle_task(task_id, is_completed):
+        print(f'{task_id} - {is_completed}')
+        main_db.update_task(task_id=task_id, completed=int(is_completed))
+        load_task()
+
     def add_task(_):
         if task_input.value:
             task = task_input.value
             task_id = main_db.add_task(task)
-            task_list.controls.append(create_task_row(task_id=task_id, task_text=task))
+            task_list.controls.append(create_task_row(task_id=task_id, task_text=task, completed=None))
             print(f'Запись сохранена! ID задачи - {task_id}')
             task_input.value = None
             page.update()
@@ -60,7 +69,24 @@ def main(page: ft.Page):
 
     main_objects = ft.Row([task_input, task_input_button])
 
-    page.add(main_objects, error_text, task_list)
+    def set_filter(filter_value):
+        nonlocal filter_type
+        filter_type = filter_value
+        load_task()
+
+    filter_buttons = ft.Row([
+        ft.ElevatedButton('Все задачи', on_click=lambda e: set_filter('all'), icon=ft.Icons.ALL_INBOX, icon_color=ft.Colors.YELLOW),
+        ft.ElevatedButton('Ожидают', on_click=lambda e: set_filter('uncompleted'), icon=ft.Icons.WATCH_LATER, icon_color=ft.Colors.RED),
+        ft.ElevatedButton('Готово', on_click=lambda e: set_filter('completed'), icon=ft.Icons.CHECK_BOX, icon_color=ft.Colors.GREEN)
+    ], alignment=ft.MainAxisAlignment.SPACE_EVENLY)
+
+    def delete_completed(_):
+        main_db.delete_task()
+        load_task()
+    
+    delete_button = ft.ElevatedButton('Очистить выполненные', icon=ft.Icons.DELETE_SWEEP, icon_color=ft.Colors.RED, on_click=delete_completed)
+
+    page.add(main_objects, filter_buttons, error_text, task_list, delete_button)
     load_task()
 
 
